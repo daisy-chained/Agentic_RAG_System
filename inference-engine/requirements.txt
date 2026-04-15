@@ -1,0 +1,30 @@
+# Pinned to match the Java-side gRPC version (grpc.version=1.62.2 in pom.xml).
+# IMPORTANT: After changing these versions, regenerate the Python stubs by
+# running ./build.sh from the project root.
+grpcio==1.62.2
+grpcio-tools==1.62.2
+protobuf==4.25.3
+
+# Local LLM inference via Ollama (https://ollama.com)
+# No API key required — model runs entirely on your machine.
+ollama>=0.4.0
+
+# Reads OLLAMA_HOST / OLLAMA_MODEL from a .env file during local development
+python-dotenv==1.0.1
+
+# RAG & Embeddings
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-ollama>=0.2.0
+langchain-qdrant>=0.1.0
+qdrant-client>=1.11.0
+
+# Document Parsing
+pypdf==4.1.0
+
+# Observability
+setuptools<70
+arize-phoenix>=4.10.2
+opentelemetry-sdk>=1.24.0
+opentelemetry-exporter-otlp>=1.24.0
+openinference-instrumentation-langchain>=0.1.0

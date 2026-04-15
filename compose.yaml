@@ -1,0 +1,80 @@
+services:
+
+  # ── Java Control Plane ───────────────────────────────────────────────────────
+  java-api:
+    build:
+      context: .                           # project root — gives Dockerfile access to shared-protos/
+      dockerfile: control-plane/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - GRPC_CLIENT_INFERENCE_ENGINE_ADDRESS=static://inference-engine:50051
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/orchestrator
+      - SPRING_DATASOURCE_USERNAME=orchestrator
+      - SPRING_DATASOURCE_PASSWORD=secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      inference-engine:
+        condition: service_started
+
+  # ── Python Inference Engine ───────────────────────────────────────────────────
+  inference-engine:
+    build:
+      context: ./inference-engine
+      dockerfile: Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      # Points the Python container at the Ollama server running on the host machine.
+      # host.docker.internal resolves on Mac/Windows automatically; the extra_hosts
+      # entry below makes it work on Linux too.
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}  # override in .env to use a different model
+    extra_hosts:
+      - "host.docker.internal:host-gateway"     # Linux: resolves host.docker.internal to host IP
+
+  # ── PostgreSQL + pgvector ─────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: orchestrator
+      POSTGRES_USER: orchestrator
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orchestrator -d orchestrator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Qdrant Vector Database ────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag-qdrant
+    ports:
+      - "6333:6333" # REST API
+      - "6334:6334" # gRPC API
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # ── Arize Phoenix (Observability UI & OTLP Collector) ───────────────────────
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: rag-phoenix
+    ports:
+      - "6006:6006" # Dashboard UI
+      - "4317:4317" # OTLP gRPC endpoint for receiving traces
+      - "4318:4318" # OTLP HTTP endpoint
+    environment:
+      - PHOENIX_PORT=6006
+      - PHOENIX_HOST=0.0.0.0
+
+volumes:
+  postgres_data:
+  qdrant_data:

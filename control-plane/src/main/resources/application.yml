@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: control-plane
+
+  # ── Java 21 Virtual Threads ────────────────────────────────────────────────
+  # Delegates all Tomcat request threads to the JVM's virtual thread scheduler.
+  # Enables handling thousands of concurrent AI requests without thread-pool
+  # exhaustion — the single biggest concurrency win in Java 21+.
+  threads:
+    virtual:
+      enabled: true
+
+  # ── Datasource ─────────────────────────────────────────────────────────────
+  # Defaults for local dev (overridden by Docker Compose env vars in production)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/orchestrator
+    username: orchestrator
+    password: secret
+    driver-class-name: org.postgresql.Driver
+
+  # ── JPA / Hibernate ────────────────────────────────────────────────────────
+  jpa:
+    hibernate:
+      # Phase 2: auto-create tables on startup, drop on shutdown.
+      # Switch to 'validate' + Flyway migrations before Phase 3 deployment.
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: 8080
+
+# ── gRPC client ────────────────────────────────────────────────────────────────
+# Channel name must match the @GrpcClient("inference-engine") annotation.
+# Overridden in Docker Compose via GRPC_CLIENT_INFERENCE_ENGINE_ADDRESS env var.
+grpc:
+  client:
+    inference-engine:
+      address: 'static://localhost:50051'
+      negotiation-type: plaintext
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.ai.orchestrator: DEBUG
+    io.grpc: INFO
+

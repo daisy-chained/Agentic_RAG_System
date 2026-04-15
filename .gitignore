@@ -1,0 +1,135 @@
+# =============================================================================
+# Agentic RAG System — Root .gitignore
+# Stack: Java (Spring Boot / Maven) · Python (FastAPI) · React (Vite/TS)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Java / Maven  (control-plane)
+# -----------------------------------------------------------------------------
+control-plane/target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Maven wrapper
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# -----------------------------------------------------------------------------
+# Python / FastAPI  (inference-engine)
+# -----------------------------------------------------------------------------
+# Virtual environment
+inference-engine/venv/
+inference-engine/.venv/
+**/__pycache__/
+**/*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checker caches
+.mypy_cache/
+.pytype/
+.pyre/
+
+# Generated gRPC stubs (regenerated from shared-protos at build time)
+inference-engine/ai_service_pb2.py
+inference-engine/ai_service_pb2_grpc.py
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.secret
+
+# -----------------------------------------------------------------------------
+# React / Vite / Node  (frontend)
+# -----------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/build/
+
+# Vite / misc
+*.local
+frontend/coverage/
+
+# -----------------------------------------------------------------------------
+# Logs  (all services)
+# -----------------------------------------------------------------------------
+*.log
+*.log.*
+logs/
+frontend.log
+inference-engine.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# -----------------------------------------------------------------------------
+# Docker
+# -----------------------------------------------------------------------------
+# Compose override is often machine-specific
+docker-compose.override.yml
+compose.override.yml
+
+# -----------------------------------------------------------------------------
+# IDE — IntelliJ IDEA / Android Studio
+# -----------------------------------------------------------------------------
+.idea/*
+# Keep shared run/code-style configs
+!.idea/runConfigurations/
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+*.iws
+*.ipr
+out/
+
+# -----------------------------------------------------------------------------
+# IDE — VS Code
+# -----------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# -----------------------------------------------------------------------------
+# OS artefacts
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# -----------------------------------------------------------------------------
+# Misc
+# -----------------------------------------------------------------------------
+*.bak
+*.swp
+*.swo
+*.tmp
