@@ -10,7 +10,6 @@ import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -19,7 +18,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,11 +57,8 @@ class DocumentServiceTest {
 
         documentService.indexDocumentAsync(metadata, new byte[]{1, 2, 3});
 
-        // INDEXING save happens first, then INDEXED save in finally
-        InOrder order = inOrder(documentRepository);
-        order.verify(documentRepository).save(any()); // INDEXING
-        order.verify(documentRepository).save(any()); // INDEXED (finally)
-
+        // save() called twice: once for INDEXING transition, once in finally for INDEXED
+        verify(documentRepository, times(2)).save(metadata);
         assertThat(metadata.getStatus()).isEqualTo(IndexingStatus.INDEXED);
         assertThat(metadata.getChunkCount()).isEqualTo(7);
     }
