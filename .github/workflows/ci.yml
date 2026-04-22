@@ -132,11 +132,38 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------------
-  # Job 4 – Docker image builds (validates containerisation)
+  # Job 4a – Detect which services have changed
   # ---------------------------------------------------------------------------
-  validate-docker-builds:
-    name: Validate – Docker Builds
+  changes:
+    name: Detect – Changed Paths
     runs-on: ubuntu-latest
+    outputs:
+      inference-engine: ${{ steps.filter.outputs.inference-engine }}
+      control-plane: ${{ steps.filter.outputs.control-plane }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            inference-engine:
+              - 'inference-engine/**'
+              - 'shared-protos/**'
+            control-plane:
+              - 'control-plane/**'
+              - 'shared-protos/**'
+            frontend:
+              - 'frontend/**'
+
+  # ---------------------------------------------------------------------------
+  # Job 4b – Build inference-engine image
+  # ---------------------------------------------------------------------------
+  build-inference-engine:
+    name: Build – inference-engine image
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.inference-engine == 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -152,7 +179,24 @@ jobs:
           push: false
           tags: agentic-rag/inference-engine:ci
           cache-from: type=gha,scope=inference-engine
-          cache-to: type=gha,mode=max,scope=inference-engine
+          cache-to: >-
+            ${{ github.ref == 'refs/heads/main' &&
+                'type=gha,mode=max,scope=inference-engine' || '' }}
+
+  # ---------------------------------------------------------------------------
+  # Job 4c – Build control-plane image
+  # ---------------------------------------------------------------------------
+  build-control-plane:
+    name: Build – control-plane image
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.control-plane == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build control-plane image
         uses: docker/build-push-action@v6
@@ -162,7 +206,24 @@ jobs:
           push: false
           tags: agentic-rag/control-plane:ci
           cache-from: type=gha,scope=control-plane
-          cache-to: type=gha,mode=max,scope=control-plane
+          cache-to: >-
+            ${{ github.ref == 'refs/heads/main' &&
+                'type=gha,mode=max,scope=control-plane' || '' }}
+
+  # ---------------------------------------------------------------------------
+  # Job 4d – Build frontend image
+  # ---------------------------------------------------------------------------
+  build-frontend:
+    name: Build – frontend image
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build frontend image
         uses: docker/build-push-action@v6
@@ -172,7 +233,19 @@ jobs:
           push: false
           tags: agentic-rag/frontend:ci
           cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
+          cache-to: >-
+            ${{ github.ref == 'refs/heads/main' &&
+                'type=gha,mode=max,scope=frontend' || '' }}
+
+  # ---------------------------------------------------------------------------
+  # Job 4e – Validate compose.yaml (no image build needed)
+  # ---------------------------------------------------------------------------
+  validate-compose:
+    name: Validate – compose.yaml
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Validate compose.yaml
         run: docker compose config --quiet
