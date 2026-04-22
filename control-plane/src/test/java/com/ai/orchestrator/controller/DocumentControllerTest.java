@@ -1,5 +1,6 @@
 package com.ai.orchestrator.controller;
 
+import com.ai.orchestrator.config.SecurityConfig;
 import com.ai.orchestrator.model.DocumentMetadata;
 import com.ai.orchestrator.model.IndexingStatus;
 import com.ai.orchestrator.repository.DocumentMetadataRepository;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(DocumentController.class)
+@Import(SecurityConfig.class)
 class DocumentControllerTest {
 
     @Autowired

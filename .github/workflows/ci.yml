@@ -70,9 +70,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-
-      - name: Install runtime dependencies
-        run: pip install -r inference-engine/requirements.txt
+          cache-dependency-path: inference-engine/requirements-test.txt
 
       - name: Install test dependencies
         run: pip install -r inference-engine/requirements-test.txt

@@ -1,7 +1,7 @@
 package com.ai.orchestrator.integration;
 
+import com.ai.orchestrator.AiClient;
 import com.ai.orchestrator.grpc.AgentResponse;
-import com.ai.orchestrator.grpc.AiAgentServiceGrpc.AiAgentServiceBlockingStub;
 import com.ai.orchestrator.repository.ConversationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +17,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -26,7 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Full Spring context smoke test.
  * Boots the real application against a Testcontainers Postgres instance.
- * The gRPC stub is mocked so no Python inference engine is required.
+ * AiClient (the Spring @Service that wraps gRPC) is mocked so no Python
+ * inference engine or gRPC channel is required.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -55,9 +57,13 @@ class ChatIntegrationTest {
     @Autowired
     private ConversationRepository conversationRepository;
 
-    // Mock the low-level gRPC stub so no Python engine is needed
+    /**
+     * Mock AiClient (the @Service bean) rather than the raw gRPC stub.
+     * The gRPC stub is injected via @GrpcClient — not a standard Spring bean —
+     * so @MockBean on the stub type has no effect on the real AiClient instance.
+     */
     @MockBean
-    private AiAgentServiceBlockingStub aiStub;
+    private AiClient aiClient;
 
     @Test
     void postChat_roundTrip_persistsConversationRow() throws Exception {
@@ -66,7 +72,8 @@ class ChatIntegrationTest {
                 .setConfidenceScore(0.95f)
                 .setLatencyMs(5L)
                 .build();
-        when(aiStub.processQuery(any())).thenReturn(fakeResponse);
+        when(aiClient.processQuery(anyString(), anyString(), anyList()))
+                .thenReturn(fakeResponse);
 
         mockMvc.perform(post("/api/chat")
                         .contentType(MediaType.APPLICATION_JSON)
