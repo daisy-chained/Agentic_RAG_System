@@ -59,6 +59,14 @@ jobs:
           path: control-plane/target/surefire-reports/*.xml
           retention-days: 14
 
+      - name: Upload JaCoCo HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-plane-coverage
+          path: control-plane/target/site/jacoco/
+          retention-days: 14
+
   # ---------------------------------------------------------------------------
   # Job 2 – Python inference-engine
   # ---------------------------------------------------------------------------
@@ -122,3 +130,49 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage/
           retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Job 4 – Docker image builds (validates containerisation)
+  # ---------------------------------------------------------------------------
+  validate-docker-builds:
+    name: Validate – Docker Builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build inference-engine image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: inference-engine/Dockerfile
+          push: false
+          tags: agentic-rag/inference-engine:ci
+          cache-from: type=gha,scope=inference-engine
+          cache-to: type=gha,mode=max,scope=inference-engine
+
+      - name: Build control-plane image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: control-plane/Dockerfile
+          push: false
+          tags: agentic-rag/control-plane:ci
+          cache-from: type=gha,scope=control-plane
+          cache-to: type=gha,mode=max,scope=control-plane
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: frontend/Dockerfile
+          push: false
+          tags: agentic-rag/frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Validate compose.yaml
+        run: docker compose config --quiet
