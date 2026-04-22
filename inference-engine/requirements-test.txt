@@ -1,0 +1,19 @@
+# Minimal dependencies for CI testing.
+# The test suite stubs out all heavy runtime dependencies (Qdrant, Ollama,
+# arize-phoenix, langchain-community, etc.) using sys.modules mocking.
+# Only the packages that tests import directly are required here.
+
+# gRPC runtime + codegen (stub generation happens in CI before running tests)
+grpcio==1.62.2
+grpcio-tools==1.62.2
+protobuf==4.25.3
+
+# LangChain core — tests use Document, HumanMessage, AIMessage directly
+langchain-core>=0.3.0
+
+# .env loading (used by rag.py and main.py at module level)
+python-dotenv==1.0.1
+
+# Test framework
+pytest>=8.0
+pytest-asyncio>=0.23
