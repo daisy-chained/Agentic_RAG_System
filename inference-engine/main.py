@@ -22,9 +22,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import rag
 
 # ── Observability Tracing (Arize Phoenix) ─────────────────────────────────────
+# Reads PHOENIX_OTLP_ENDPOINT from env; defaults to localhost for local dev.
+_PHOENIX_ENDPOINT = os.getenv("PHOENIX_OTLP_ENDPOINT", "http://localhost:4317")
 trace.set_tracer_provider(TracerProvider())
 trace.get_tracer_provider().add_span_processor(
-    SimpleSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:4317"))
+    SimpleSpanProcessor(OTLPSpanExporter(endpoint=_PHOENIX_ENDPOINT))
 )
 LangChainInstrumentor().instrument()
 

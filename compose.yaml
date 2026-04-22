@@ -1,5 +1,16 @@
 services:
 
+  # ── React Frontend (nginx) ────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      java-api:
+        condition: service_started
+
   # ── Java Control Plane ───────────────────────────────────────────────────────
   java-api:
     build:
@@ -16,13 +27,13 @@ services:
       postgres:
         condition: service_healthy
       inference-engine:
-        condition: service_started
+        condition: service_healthy
 
   # ── Python Inference Engine ───────────────────────────────────────────────────
   inference-engine:
     build:
-      context: ./inference-engine
-      dockerfile: Dockerfile
+      context: .                           # project root — gives Dockerfile access to shared-protos/
+      dockerfile: inference-engine/Dockerfile
     ports:
       - "50051:50051"
     environment:
@@ -31,8 +42,25 @@ services:
       # entry below makes it work on Linux too.
       - OLLAMA_HOST=http://host.docker.internal:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}  # override in .env to use a different model
+      # Qdrant connection — resolved via Docker Compose internal DNS
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      # Forward traces to the Arize Phoenix container
+      - PHOENIX_OTLP_ENDPOINT=http://phoenix:4317
     extra_hosts:
       - "host.docker.internal:host-gateway"     # Linux: resolves host.docker.internal to host IP
+    depends_on:
+      qdrant:
+        condition: service_started
+      phoenix:
+        condition: service_started
+    healthcheck:
+      # TCP probe: succeeds once the gRPC server is accepting connections on 50051
+      test: ["CMD-SHELL", "python3 -c 'import socket; s=socket.socket(); s.settimeout(2); s.connect((\"localhost\",50051)); s.close()'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
   # ── PostgreSQL + pgvector ─────────────────────────────────────────────────────
   postgres:
