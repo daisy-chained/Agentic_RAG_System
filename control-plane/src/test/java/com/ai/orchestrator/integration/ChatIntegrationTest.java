@@ -47,6 +47,8 @@ class ChatIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        // Explicitly override the H2 driver set in src/test/resources/application.yml
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.database-platform",
                 () -> "org.hibernate.dialect.PostgreSQLDialect");
     }

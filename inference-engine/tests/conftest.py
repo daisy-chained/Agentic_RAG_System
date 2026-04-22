@@ -55,3 +55,9 @@ _otel_trace.set_tracer_provider = MagicMock()
 _otel_trace.get_tracer_provider = MagicMock(return_value=MagicMock())
 sys.modules["opentelemetry.instrumentation"] = _make_stub_module("opentelemetry.instrumentation")
 sys.modules["openinference.instrumentation.langchain"].LangChainInstrumentor = MagicMock()
+
+# Stub langchain_ollama so that `from langchain_ollama import ChatOllama` in
+# main.py succeeds without the real package being installed.
+_langchain_ollama = _make_stub_module("langchain_ollama")
+_langchain_ollama.OllamaEmbeddings = MagicMock()
+_langchain_ollama.ChatOllama = MagicMock()
