@@ -69,11 +69,13 @@ class TestInitVectorStore:
     def test_returns_qdrant_vector_store_with_correct_collection(self):
         self.mock_client.collection_exists.return_value = True
         mock_store = MagicMock()
-        sys.modules["langchain_qdrant"].QdrantVectorStore.return_value = mock_store
 
-        result = rag_module.init_vector_store()
+        # Patch the name inside rag's own namespace so other test files replacing
+        # sys.modules["langchain_qdrant"].QdrantVectorStore don't affect us.
+        with patch.object(rag_module, "QdrantVectorStore", return_value=mock_store) as mock_vs:
+            result = rag_module.init_vector_store()
 
-        sys.modules["langchain_qdrant"].QdrantVectorStore.assert_called()
-        kwargs = sys.modules["langchain_qdrant"].QdrantVectorStore.call_args[1]
+        mock_vs.assert_called_once()
+        kwargs = mock_vs.call_args[1]
         assert kwargs["collection_name"] == rag_module.COLLECTION_NAME
         assert result is mock_store
