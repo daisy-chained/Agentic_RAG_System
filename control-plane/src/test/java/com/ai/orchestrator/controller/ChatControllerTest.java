@@ -1,5 +1,6 @@
 package com.ai.orchestrator.controller;
 
+import com.ai.orchestrator.config.SecurityConfig;
 import com.ai.orchestrator.dto.QueryResponse;
 import com.ai.orchestrator.service.AiQueryService;
 import com.ai.orchestrator.service.AiQueryService.QueryServiceException;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -19,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ChatController.class)
+@Import(SecurityConfig.class)
 class ChatControllerTest {
 
     @Autowired
