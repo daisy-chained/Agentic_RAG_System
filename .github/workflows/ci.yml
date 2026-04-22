@@ -178,10 +178,10 @@ jobs:
           file: inference-engine/Dockerfile
           push: false
           tags: agentic-rag/inference-engine:ci
-          cache-from: type=gha,scope=inference-engine
-          cache-to: >-
-            ${{ github.ref == 'refs/heads/main' &&
-                'type=gha,mode=max,scope=inference-engine' || '' }}
+          cache-from: |
+            type=gha,scope=inference-engine-${{ github.ref_name }}
+            type=gha,scope=inference-engine
+          cache-to: type=gha,mode=max,scope=inference-engine-${{ github.ref_name }}
 
   # ---------------------------------------------------------------------------
   # Job 4c – Build control-plane image
@@ -205,10 +205,10 @@ jobs:
           file: control-plane/Dockerfile
           push: false
           tags: agentic-rag/control-plane:ci
-          cache-from: type=gha,scope=control-plane
-          cache-to: >-
-            ${{ github.ref == 'refs/heads/main' &&
-                'type=gha,mode=max,scope=control-plane' || '' }}
+          cache-from: |
+            type=gha,scope=control-plane-${{ github.ref_name }}
+            type=gha,scope=control-plane
+          cache-to: type=gha,mode=max,scope=control-plane-${{ github.ref_name }}
 
   # ---------------------------------------------------------------------------
   # Job 4d – Build frontend image
@@ -232,10 +232,10 @@ jobs:
           file: frontend/Dockerfile
           push: false
           tags: agentic-rag/frontend:ci
-          cache-from: type=gha,scope=frontend
-          cache-to: >-
-            ${{ github.ref == 'refs/heads/main' &&
-                'type=gha,mode=max,scope=frontend' || '' }}
+          cache-from: |
+            type=gha,scope=frontend-${{ github.ref_name }}
+            type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend-${{ github.ref_name }}
 
   # ---------------------------------------------------------------------------
   # Job 4e – Validate compose.yaml (no image build needed)
