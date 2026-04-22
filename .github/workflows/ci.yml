@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: ["**"]
 
+# Minimal token permissions — jobs only read repository contents.
+permissions:
+  contents: read
+
 jobs:
   # ---------------------------------------------------------------------------
   # Job 1 – Java control-plane
