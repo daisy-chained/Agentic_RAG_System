@@ -22,7 +22,12 @@ def _ensure_proto_stubs():
         sys.modules["ai_service_pb2"] = mod
 
         class AgentResponse:
-            def __init__(self, **kw): pass
+            def __init__(self, answer="", source_documents=None,
+                         confidence_score=0.0, latency_ms=0):
+                self.answer = answer
+                self.source_documents = source_documents or []
+                self.confidence_score = confidence_score
+                self.latency_ms = latency_ms
 
         class IndexResponse:
             def __init__(self, chunk_count=0, status=""):
