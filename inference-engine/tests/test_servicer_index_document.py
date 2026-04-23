@@ -53,7 +53,7 @@ _ensure_proto_stubs()
 for pkg in ["langchain_ollama", "langchain_qdrant", "qdrant_client",
             "qdrant_client.http", "qdrant_client.http.models", "dotenv",
             "langchain_community", "langchain_community.document_loaders",
-            "langchain_text_splitters"]:
+            "langchain_text_splitters", "sentence_transformers"]:
     if pkg not in sys.modules:
         m = types.ModuleType(pkg)
         sys.modules[pkg] = m
@@ -65,6 +65,7 @@ sys.modules["qdrant_client"].QdrantClient = MagicMock()
 _dist = MagicMock(); _dist.COSINE = "Cosine"
 sys.modules["qdrant_client.http.models"].Distance = _dist
 sys.modules["qdrant_client.http.models"].VectorParams = MagicMock()
+sys.modules["sentence_transformers"].CrossEncoder = MagicMock()
 
 import rag as rag_module  # noqa: E402
 

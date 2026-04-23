@@ -19,6 +19,9 @@ langchain-ollama>=0.2.0
 langchain-qdrant>=0.1.0
 qdrant-client>=1.11.0
 
+# Reranking — cross-encoder used to rescore Qdrant candidates before prompting
+sentence-transformers>=3.0.0
+
 # Document Parsing
 pypdf==4.1.0
 
