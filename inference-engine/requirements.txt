@@ -24,6 +24,13 @@ sentence-transformers>=3.0.0
 
 # Document Parsing
 pypdf==4.1.0
+docx2txt>=0.8           # .docx via Docx2txtLoader
+openpyxl>=3.1.0         # .xlsx via _XlsxLoader
+xlrd>=2.0.1             # .xls (legacy Excel) via _XlsLoader
+python-pptx>=0.6.21     # .pptx via _PptxLoader
+beautifulsoup4>=4.12.0  # .html/.htm via BSHTMLLoader; .epub via _EpubLoader
+lxml>=5.0.0             # XML/HTML parser used by ebooklib and beautifulsoup4
+ebooklib>=0.18          # .epub via _EpubLoader
 
 # Observability
 setuptools<70
