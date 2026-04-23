@@ -8,7 +8,6 @@ import types
 from unittest.mock import MagicMock
 
 import pytest
-import numpy as np
 
 # ---------------------------------------------------------------------------
 # Stub sentence_transformers before importing reranker
@@ -48,9 +47,9 @@ def _make_doc(content: str, source: str = "doc.pdf"):
 
 
 def _mock_encoder(scores):
-    """Return a CrossEncoder mock whose predict() returns *scores* as an ndarray."""
+    """Return a CrossEncoder mock whose predict() returns *scores* as a list."""
     enc = MagicMock()
-    enc.predict.return_value = np.array(scores)
+    enc.predict.return_value = list(scores)
     return enc
 
 
@@ -134,7 +133,7 @@ class TestRerank:
         """_get_cross_encoder() must only create the model on first call."""
         reranker_module._cross_encoder = None
         mock_instance = MagicMock()
-        mock_instance.predict = MagicMock(return_value=np.array([0.5]))
+        mock_instance.predict = MagicMock(return_value=[0.5])
         mock_cls = MagicMock(return_value=mock_instance)
 
         # Patch the name bound in reranker's own namespace (import-time binding)
