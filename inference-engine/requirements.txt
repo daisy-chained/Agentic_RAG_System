@@ -7,23 +7,23 @@ protobuf==4.25.3
 
 # Local LLM inference via Ollama (https://ollama.com)
 # No API key required — model runs entirely on your machine.
-ollama>=0.4.0
+ollama==0.6.1
 
 # Reads OLLAMA_HOST / OLLAMA_MODEL from a .env file during local development
 python-dotenv==1.0.1
 
 # RAG & Embeddings
-langchain>=0.3.0
-langchain-community>=0.3.0
-langchain-ollama>=0.2.0
-langchain-qdrant>=0.1.0
-qdrant-client>=1.11.0
+langchain==1.2.15
+langchain-community==0.4.1
+langchain-ollama==1.1.0
+langchain-qdrant==1.1.0
+qdrant-client==1.17.1
 
 # Document Parsing
 pypdf==4.1.0
 
 # Observability
-arize-phoenix>=4.10.2
-opentelemetry-sdk>=1.24.0
-opentelemetry-exporter-otlp>=1.24.0
-openinference-instrumentation-langchain>=0.1.0
+arize-phoenix==14.6.0
+opentelemetry-sdk==1.27.0
+opentelemetry-exporter-otlp==1.27.0
+openinference-instrumentation-langchain==0.1.63
