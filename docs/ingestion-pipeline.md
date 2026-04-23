@@ -33,9 +33,16 @@ DocumentController (Java)
                 ▼
         Python Inference Engine — IndexDocument handler
           ├─ Writes bytes to a temp file
-          ├─ Loads document:
-          │    .pdf → PyPDFLoader
-          │    .txt / .md → TextLoader
+          ├─ Loads document (extension → loader, all pure-Python):
+          │    .pdf              → PyPDFLoader
+          │    .docx             → Docx2txtLoader
+          │    .xlsx             → _XlsxLoader  (openpyxl)
+          │    .xls              → _XlsLoader   (xlrd)
+          │    .pptx             → _PptxLoader  (python-pptx)
+          │    .csv              → CSVLoader
+          │    .html / .htm      → BSHTMLLoader (beautifulsoup4)
+          │    .epub             → _EpubLoader  (ebooklib + beautifulsoup4)
+          │    .md / .txt / else → TextLoader
           ├─ RecursiveCharacterTextSplitter
           │    chunk_size = 1 000 tokens
           │    chunk_overlap = 200 tokens
@@ -54,7 +61,21 @@ DocumentController (Java)
 
 **Metadata on every chunk.** Each Qdrant point carries `source` (original filename), `document_id` (the PostgreSQL UUID), and `uploaded_by` (the uploader's userId). This allows the system to surface which specific document a retrieved chunk came from in the API response's `sourceDocuments` field.
 
-**Supported file types:** `.pdf` (via `PyPDFLoader`), `.txt` and `.md` (via `TextLoader`).
+**Supported file types:**
+
+| Extension(s) | Loader | Library |
+|---|---|---|
+| `.pdf` | `PyPDFLoader` | `pypdf` |
+| `.docx` | `Docx2txtLoader` | `docx2txt` |
+| `.xlsx` | `_XlsxLoader` | `openpyxl` |
+| `.xls` | `_XlsLoader` | `xlrd` |
+| `.pptx` | `_PptxLoader` | `python-pptx` |
+| `.csv` | `CSVLoader` | *(LangChain built-in)* |
+| `.html`, `.htm` | `BSHTMLLoader` | `beautifulsoup4` |
+| `.epub` | `_EpubLoader` | `ebooklib` + `beautifulsoup4` |
+| `.md`, `.txt`, *(unknown)* | `TextLoader` | *(stdlib)* |
+
+All parsers are pure-Python — no system-level packages (e.g. `libmagic`, LibreOffice) are required.
 
 ---
 
@@ -88,13 +109,17 @@ After generating a draft answer, the inference engine immediately runs a second 
 User query
     │
     ▼
-1. Qdrant similarity search  (top-3 chunks)
+1. Qdrant similarity search  (top-10 candidates)
     │
     ▼
-2. First LLM call  →  draft answer
+2. Cross-encoder reranker  (cross-encoder/ms-marco-MiniLM-L-6-v2)
+   Scores each (query, chunk) pair; retains top-3
     │
     ▼
-3. Reflexion LLM call
+3. First LLM call  →  draft answer
+    │
+    ▼
+4. Reflexion LLM call
    Prompt: "QUERY: ...  CONTEXT: ...  DRAFT ANSWER: ..."
    Rules:
      - If context doesn't answer the query → draft must say "I don't know"
@@ -107,6 +132,8 @@ User query
 ```
 
 ### Design notes
+
+**Cross-encoder reranking.** Before generating any answer, the inference engine fetches the top-10 candidate chunks from Qdrant and passes each `(query, chunk)` pair through a local `cross-encoder/ms-marco-MiniLM-L-6-v2` model. Only the top-3 highest-scoring chunks are forwarded to the LLM. This two-stage retrieval strategy improves context precision — the lightweight cross-encoder can catch relevance mismatches that cosine distance misses — without incurring an extra LLM call per chunk.
 
 Both LLM calls use the **same Ollama model** (selected at startup via `OLLAMA_MODEL`) and the **same context window** (`OLLAMA_NUM_CTX`). This means the Reflexion pass has the same capabilities as the initial generation pass — it is genuinely capable of catching errors the first pass could make.
 
