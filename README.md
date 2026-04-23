@@ -47,8 +47,9 @@ A context-aware, polyglot **Retrieval-Augmented Generation** platform built for 
 
 - **Polyglot gRPC communication** — a single `.proto` contract (`shared-protos/ai_service.proto`) generates type-safe stubs for both Java (Maven plugin) and Python (`grpcio-tools`).
 - **Reflexion self-correction** — after generating a draft answer the inference engine runs a second LLM pass to detect hallucinations and override the response if needed.
+- **Cross-encoder reranking** — Qdrant retrieves the top-10 candidate chunks; a local `cross-encoder/ms-marco-MiniLM-L-6-v2` model rescores each `(query, chunk)` pair and retains only the top-3, improving context precision without an extra LLM call.
 - **Async document ingestion** — Spring Boot's `@Async` with Java 21 virtual threads hands off the heavy gRPC indexing call without blocking a web thread.
-- **Full-text chunking** — uploaded PDFs and plain-text files are split into 1 000-token chunks (200-token overlap) and embedded via `nomic-embed-text` before being stored in Qdrant.
+- **Multi-format document support** — uploaded documents (PDF, Word, Excel, PowerPoint, CSV, HTML, EPUB, Markdown, plain-text) are split into 1 000-token chunks (200-token overlap) and embedded via `nomic-embed-text` before being stored in Qdrant. All parsers are pure-Python — no system-level packages (e.g. `libmagic`, LibreOffice) are required.
 - **Session-aware chat** — the last 5 conversation turns are loaded from PostgreSQL and forwarded to the LLM on every request, enabling multi-turn conversations.
 - **OpenTelemetry tracing** — LangChain calls are auto-instrumented via `openinference` and exported to Arize Phoenix over OTLP gRPC.
 - **Hardware-aware initialisation** — `init.sh` detects GPU vendor and VRAM, installs drivers, and selects the largest Ollama model + context window that fits entirely in VRAM (or RAM).
