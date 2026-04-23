@@ -208,6 +208,45 @@ Traces capture query latency, retrieved chunks, LLM inputs/outputs, and whether 
 
 ---
 
+## CI / CD Pipeline
+
+Every push and pull request triggers the GitHub Actions workflow (`.github/workflows/ci.yml`).
+
+### Job topology
+
+```
+test-control-plane  ─┐
+test-inference-engine ─┤  (always run, in parallel)
+test-frontend       ─┘
+
+changes (Detect – Changed Paths)  ─┬─► build-inference-engine  (if inference-engine/** or shared-protos/** changed)
+                                    ├─► build-control-plane     (if control-plane/**     or shared-protos/** changed)
+                                    └─► build-frontend          (if frontend/**           changed)
+
+validate-compose  (always run, independent)
+```
+
+### Path-based Docker build gating
+
+`Job 4a – Detect – Changed Paths` uses [`dorny/paths-filter@v3`](https://github.com/dorny/paths-filter) to determine which service trees were modified.  The three downstream build jobs each carry:
+
+```yaml
+needs: changes
+if: needs.changes.outputs.<service> == 'true'
+```
+
+This means a commit that only touches `frontend/` will not rebuild or repush the `inference-engine` or `control-plane` images — keeping CI fast and avoiding unnecessary image churn.
+
+| Filter key | Paths watched |
+|---|---|
+| `inference-engine` | `inference-engine/**`, `shared-protos/**` |
+| `control-plane` | `control-plane/**`, `shared-protos/**` |
+| `frontend` | `frontend/**` |
+
+`shared-protos/**` is included in both service filters because a `.proto` change regenerates gRPC stubs for both Java and Python.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
