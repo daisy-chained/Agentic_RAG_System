@@ -76,7 +76,7 @@ A context-aware, polyglot **Retrieval-Augmented Generation** platform built for 
 - **Polyglot gRPC communication** — a single `.proto` contract (`shared-protos/ai_service.proto`) generates type-safe stubs for both Java (Maven plugin) and Python (`grpcio-tools`).
 - **Reflexion self-correction** — after generating a draft answer the inference engine runs a second LLM pass to detect hallucinations and override the response if needed.
 - **Async document ingestion** — Spring Boot's `@Async` with Java 21 virtual threads hands off the heavy gRPC indexing call without blocking a web thread.
-- **Full-text chunking** — uploaded PDFs and plain-text files are split into 1 000-token chunks (200-token overlap) and embedded via `nomic-embed-text` before being stored in Qdrant.
+- **Full-text chunking** — uploaded documents (PDF, Word, Excel, PowerPoint, CSV, HTML, EPUB, Markdown, plain-text) are split into 1 000-token chunks (200-token overlap) and embedded via `nomic-embed-text` before being stored in Qdrant. All parsers are pure-Python — no system-level packages (e.g. `libmagic`, LibreOffice) are required.
 - **Session-aware chat** — the last 5 conversation turns are loaded from PostgreSQL and forwarded to the LLM on every request, enabling multi-turn conversations.
 - **OpenTelemetry tracing** — LangChain calls are auto-instrumented via `openinference` and exported to Arize Phoenix over OTLP gRPC.
 - **Hardware-aware initialisation** — `init.sh` detects GPU vendor and VRAM, installs drivers, and selects the largest Ollama model + context window that fits entirely in VRAM (or RAM).
@@ -294,7 +294,7 @@ npm run dev
 
 The Vite dev server proxies all `/api/*` requests to `http://localhost:8080` (the Spring Boot control plane). This means the frontend makes calls to its own origin (`localhost:5173/api/...`) and Vite transparently forwards them — no CORS configuration is needed in development.
 
-**Accepted upload file types:** `.pdf`, `.md`, `.txt`
+**Accepted upload file types:** `.pdf`, `.docx`, `.xlsx`, `.xls`, `.pptx`, `.csv`, `.html`, `.htm`, `.epub`, `.md`, `.txt`
 
 > **Note:** The frontend uses the hardcoded `userId: "dev1"` for all requests during local development. This is intentional for Phase 1 and should be replaced with real authentication in a later phase.
 
@@ -377,7 +377,7 @@ All endpoints are served by the Spring Boot control plane on port `8080`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `file` | file | ✓ | The document to index (`.pdf`, `.txt`, `.md`) |
+| `file` | file | ✓ | The document to index. Supported: `.pdf`, `.docx`, `.xlsx`, `.xls`, `.pptx`, `.csv`, `.html`, `.htm`, `.epub`, `.md`, `.txt` |
 | `userId` | string | ✓ | Owner of the document |
 
 **Response `202 Accepted`**
@@ -486,9 +486,16 @@ DocumentController (Java)
                 ▼
         Python Inference Engine — IndexDocument handler
           ├─ Writes bytes to a temp file
-          ├─ Loads document:
-          │    .pdf → PyPDFLoader
-          │    .txt / .md → TextLoader
+          ├─ Loads document (extension → loader, all pure-Python):
+          │    .pdf              → PyPDFLoader
+          │    .docx             → Docx2txtLoader
+          │    .xlsx             → _XlsxLoader  (openpyxl)
+          │    .xls              → _XlsLoader   (xlrd)
+          │    .pptx             → _PptxLoader  (python-pptx)
+          │    .csv              → CSVLoader
+          │    .html / .htm      → BSHTMLLoader (beautifulsoup4)
+          │    .epub             → _EpubLoader  (ebooklib + beautifulsoup4)
+          │    .md / .txt / else → TextLoader
           ├─ RecursiveCharacterTextSplitter
           │    chunk_size = 1 000 tokens
           │    chunk_overlap = 200 tokens
@@ -497,7 +504,21 @@ DocumentController (Java)
                └─ Upserts chunks → Qdrant collection "agentic_rag"
 ```
 
-**Supported file types:** `.pdf` (via `PyPDFLoader`), `.txt` and `.md` (via `TextLoader`).
+**Supported file types:**
+
+| Extension(s) | Loader | Library |
+|---|---|---|
+| `.pdf` | `PyPDFLoader` | `pypdf` |
+| `.docx` | `Docx2txtLoader` | `docx2txt` |
+| `.xlsx` | `_XlsxLoader` | `openpyxl` |
+| `.xls` | `_XlsLoader` | `xlrd` |
+| `.pptx` | `_PptxLoader` | `python-pptx` |
+| `.csv` | `CSVLoader` | *(LangChain built-in)* |
+| `.html`, `.htm` | `BSHTMLLoader` | `beautifulsoup4` |
+| `.epub` | `_EpubLoader` | `ebooklib` + `beautifulsoup4` |
+| `.md`, `.txt`, *(unknown)* | `TextLoader` | *(stdlib)* |
+
+All parsers are pure-Python — no system-level packages are required.
 
 **Qdrant collection:** `agentic_rag` — cosine similarity, 768-dimensional vectors. The collection is created automatically on first start if it does not exist.
 
@@ -746,6 +767,7 @@ Agentic_RAG_System/
 | **Control Plane** | Java 21, Spring Boot 3.2, Spring Data JPA, Spring Security |
 | **gRPC (Java)** | `grpc-client-spring-boot-starter`, `protobuf-maven-plugin` |
 | **Inference Engine** | Python 3.12, `grpcio 1.62.2`, `langchain`, `langchain-ollama` |
+| **Document Parsing** | `pypdf`, `docx2txt`, `openpyxl`, `xlrd`, `python-pptx`, `beautifulsoup4`, `ebooklib` — all pure-Python |
 | **Vector Store** | Qdrant, `langchain-qdrant`, `nomic-embed-text` (768-dim cosine) |
 | **LLM** | Ollama — model auto-selected by `init.sh` based on available VRAM/RAM |
 | **Persistence** | PostgreSQL 16, pgvector |
