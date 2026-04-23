@@ -32,8 +32,9 @@ LangChainInstrumentor().instrument()
 # Reads from .env locally; Docker Compose injects these as environment variables.
 load_dotenv()
 
-_OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://localhost:11434")
-_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+_OLLAMA_HOST    = os.getenv("OLLAMA_HOST",    "http://localhost:11434")
+_OLLAMA_MODEL   = os.getenv("OLLAMA_MODEL",   "llama3.2")
+_OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
 
 _SYSTEM_PROMPT = (
     "You are an expert technical AI assistant embedded in a "
@@ -42,9 +43,9 @@ _SYSTEM_PROMPT = (
     "answers in that context. Acknowledge clearly when you are uncertain."
 )
 
-_llm = ChatOllama(model=_OLLAMA_MODEL, base_url=_OLLAMA_HOST)
+_llm = ChatOllama(model=_OLLAMA_MODEL, base_url=_OLLAMA_HOST, num_ctx=_OLLAMA_NUM_CTX)
 
-print(f"✓ Inference Engine configured — ollama host={_OLLAMA_HOST} model={_OLLAMA_MODEL}")
+print(f"✓ Inference Engine configured — ollama host={_OLLAMA_HOST} model={_OLLAMA_MODEL} num_ctx={_OLLAMA_NUM_CTX}")
 
 
 # ── gRPC Servicer ─────────────────────────────────────────────────────────────
