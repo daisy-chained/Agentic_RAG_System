@@ -2,7 +2,7 @@
 # Use the official Maven image bundled with JDK 21.
 # Build context is the project root so we can access shared-protos/ for the
 # protobuf-maven-plugin (pom.xml points to ${basedir}/../shared-protos).
-FROM maven:3.9-eclipse-temurin-21-alpine AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 
 WORKDIR /app
 

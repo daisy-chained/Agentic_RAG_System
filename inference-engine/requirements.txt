@@ -23,7 +23,6 @@ qdrant-client>=1.11.0
 pypdf==4.1.0
 
 # Observability
-setuptools<70
 arize-phoenix>=4.10.2
 opentelemetry-sdk>=1.24.0
 opentelemetry-exporter-otlp>=1.24.0
