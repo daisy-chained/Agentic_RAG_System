@@ -31,6 +31,7 @@ services:
       # entry below makes it work on Linux too.
       - OLLAMA_HOST=http://host.docker.internal:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}  # override in .env to use a different model
+      - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-4096}  # context window — set by init.sh based on VRAM/RAM
     extra_hosts:
       - "host.docker.internal:host-gateway"     # Linux: resolves host.docker.internal to host IP
 
