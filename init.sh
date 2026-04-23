@@ -344,7 +344,7 @@ else
     apt_update_once
     run sudo apt-get install -y -qq wget apt-transport-https gpg
     run wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public \
-        | gpg --dearmor \
+        | run gpg --dearmor \
         | run sudo tee /etc/apt/keyrings/adoptium.gpg > /dev/null
     CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
     echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] \

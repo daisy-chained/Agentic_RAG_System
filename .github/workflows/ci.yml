@@ -122,3 +122,19 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage/
           retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Job 4 – init.sh bootstrap script
+  # ---------------------------------------------------------------------------
+  test-init-sh:
+    name: Test – init.sh (bats)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: sudo apt-get install -y bats
+
+      - name: Run bats tests
+        run: bats tests/test_init.bats
