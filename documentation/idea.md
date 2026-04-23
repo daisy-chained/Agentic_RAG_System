@@ -1,69 +1,65 @@
-This is the "Senior Engineer" move. By building a polyglot system, you’re proving you aren't just a coder—you’re an **architect**. You are demonstrating that you know how to use the right tool for the job: **Java** for system stability and **Python** for AI velocity.
+This is the "Senior Engineer" move. By building a polyglot system, you're proving you aren't just a coder—you're an **architect**. You are demonstrating that you know how to use the right tool for the job: **Java** for system stability and **Python** for AI velocity.
 
-Here is the blueprint for your project: **"The Polyglot AI Agent Orchestrator."**
+Here is the blueprint for this project: **"The Polyglot AI Agent Orchestrator."**
 
 ---
 
 ## 🏗️ The Architecture
-We’ll split the responsibilities so each language plays to its strengths.
+We split the responsibilities so each language plays to its strengths.
 
 ### 1. The Java Service (The "Control Plane")
-* **Role:** The Gateway & Brain.
-* **Tech:** Spring Boot, Spring Security, PostgreSQL.
+* **Role:** The Gateway & Orchestrator.
+* **Tech:** Spring Boot 3.2, Spring Data JPA, Spring Security, PostgreSQL.
 * **Responsibility:**
-    * **User Management:** Auth, rate limiting, and subscription tiers.
-    * **State Management:** Saving conversation history and "Ground Truth" data.
-    * **Orchestration:** Receiving a request, validating it, and sending a structured task to the Python service via **gRPC** (preferred for CV flex) or **REST**.
+    * **State Management:** Saving conversation history and document metadata in PostgreSQL.
+    * **Orchestration:** Receiving a REST request, validating it, and forwarding it to the Python inference engine via **gRPC**.
+    * **Async Indexing:** Handing off document ingestion to a virtual-thread-backed `@Async` pipeline so the HTTP thread is never blocked.
 
 ### 2. The Python Service (The "Inference Engine")
 * **Role:** The AI Specialist.
-* **Tech:** FastAPI, LangChain/LangGraph, OpenAI/Anthropic APIs.
+* **Tech:** Python 3.12, asyncio gRPC server, LangChain, Ollama (llama3.2).
 * **Responsibility:**
-    * **RAG Pipeline:** Handling document embeddings and vector database lookups.
-    * **Agentic Logic:** Using a "ReAct" pattern (Reasoning + Acting) to decide if it needs to search the web, query a DB, or just answer.
-    * **Performance:** Returning a clean JSON response back to Java.
+    * **RAG Pipeline:** Embedding documents with `nomic-embed-text` (768-dim) and storing them in Qdrant; retrieving the top-3 cosine-similar chunks at query time.
+    * **Reflexion Self-Correction:** Running a second LLM pass to detect and rewrite hallucinated answers before returning the response.
+    * **Observability:** Exporting LangChain traces to Arize Phoenix via OpenTelemetry.
 
 ---
 
-## 🛠️ The Tech Stack Comparison
+## 🛠️ The Actual Tech Stack
 
 | Component | Java Side (Stability) | Python Side (Intelligence) |
 | :--- | :--- | :--- |
-| **Framework** | Spring Boot 3.x | FastAPI |
-| **Data Storage** | PostgreSQL (User data/History) | Pinecone or ChromaDB (Vectors) |
-| **Communication** | **gRPC** (shows high-level skill) | **gRPC** / Protobuf |
-| **Testing** | JUnit 5 / Testcontainers | PyTest |
+| **Framework** | Spring Boot 3.2 | asyncio gRPC (`grpc.aio`) |
+| **Vector Storage** | — | Qdrant (cosine, 768-dim) |
+| **LLM** | — | Ollama (`llama3.2` via `langchain-ollama`) |
+| **Embeddings** | — | `nomic-embed-text` via Ollama |
+| **Data Storage** | PostgreSQL 16 + pgvector | Qdrant |
+| **Communication** | **gRPC** (`grpc-client-spring-boot-starter`) | **gRPC** / Protobuf |
+| **Testing** | JUnit 5 / Testcontainers | pytest + pytest-asyncio |
+| **Observability** | — | Arize Phoenix, OpenTelemetry, OpenInference |
 
 ---
 
-## 🚀 The Build Roadmap
+## 🚀 The Build Roadmap (As Built)
 
-### Phase 1: The Bridge (Learning Python)
-Since you know Java, Python’s syntax will feel like "pseudocode."
-* **Your Task:** Create a simple FastAPI endpoint in Python that takes a string and returns it reversed.
-* **Java Task:** Use `RestTemplate` or `WebClient` in Spring Boot to call that Python endpoint.
-* **Why:** You’ve just proven you can handle cross-service communication.
+### Phase 1: The Bridge ✅
+* Single `.proto` contract in `shared-protos/ai_service.proto` generates type-safe stubs for both Java (Maven plugin) and Python (`grpcio-tools`).
+* `build.sh` automates stub regeneration.
 
-### Phase 2: The Data Layer
-* **Python:** Implement a script that takes a PDF, chunks it into pieces, converts them into **embeddings** (using an OpenAI or HuggingFace model), and stores them in a Vector DB.
-* **Java:** Create the database schema to store the *metadata* of those PDFs (who uploaded them, when, and their status).
+### Phase 2: The Data Layer ✅
+* **Python:** `rag.py` initialises the Qdrant collection and `langchain-qdrant` vector store at startup.
+* **Java:** `DocumentMetadata` and `Conversation` JPA entities with status tracking and conversation history.
 
-### Phase 3: The "Agentic" Twist
-Instead of a simple question-answer, make the Python service an **Agent**.
-> **Example:** If a user asks "What is my account balance and how does that compare to the documentation on interest rates?", the Java service fetches the balance, sends it to Python, and Python fetches the documentation context to synthesize the answer.
+### Phase 3: The "Agentic" Twist ✅
+* `ProcessQuery` retrieves top-3 Qdrant chunks, injects them as context, generates a draft answer, then runs a Reflexion loop — a second LLM call that either approves the answer or rewrites it to eliminate hallucinations.
 
 ---
 
 ## 📝 How to write this on your CV
-This is how you frame it to catch a recruiter's eye:
 
-> **Polyglot AI Orchestration Platform (Java/Python)**
-> * Architected a distributed system utilizing a **Spring Boot** microservice for state management and a **FastAPI** service for AI inference.
-> * Implemented a **Retrieval-Augmented Generation (RAG)** pipeline in Python, reducing LLM hallucinations by 30% through context-aware grounding.
-> * Optimized inter-service communication using **gRPC**, achieving <50ms latency for internal metadata exchanges.
-> * Integrated **pgvector** for hybrid semantic search, allowing for complex queries across structured and unstructured data.
-
----
-
-### The "First Step" Challenge
-To get the ball rolling, do you want me to give you a **"Java-to-Python" Rosetta Stone** (showing how a Spring Controller looks compared to a FastAPI Route) or should we design the **gRPC Protobuf** file that will connect them?
+> **Polyglot Agentic RAG Platform (Java 21 / Python 3.12)**
+> * Architected a distributed system with a **Spring Boot 3** microservice for state management and a **Python asyncio gRPC** service for AI inference, communicating over a shared **Protobuf** contract.
+> * Implemented a **Retrieval-Augmented Generation (RAG)** pipeline with **LangChain + Qdrant**, reducing LLM hallucinations through a **Reflexion self-correction** loop that performs a second grading pass before returning any response.
+> * Optimized inter-service communication using **gRPC**, achieving sub-second latency for end-to-end RAG queries.
+> * Instrumented all LLM calls with **OpenTelemetry / OpenInference**, exporting traces to **Arize Phoenix** for latency and token-usage analysis.
+> * Delivered a full **React + Vite + TypeScript** frontend with real-time chat, document upload, and source citation display.

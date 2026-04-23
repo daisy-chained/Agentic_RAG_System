@@ -9,7 +9,7 @@ A context-aware, polyglot **Retrieval-Augmented Generation** platform built for 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     React Frontend (Vite)                   │
-│                  localhost:5173  · TypeScript                │
+│          localhost:5173 (dev) · localhost:3000 (Docker)     │
 └──────────────────────────┬──────────────────────────────────┘
                            │  REST (HTTP/JSON)
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -18,7 +18,7 @@ A context-aware, polyglot **Retrieval-Augmented Generation** platform built for 
 └──────────────────────────┬──────────────────────────────────┘
                            │  gRPC  (port 50051)
 ┌──────────────────────────▼──────────────────────────────────┐
-│          Inference Engine  (FastAPI / asyncio · Python 3.12) │
+│        Inference Engine  (asyncio gRPC server · Python 3.12) │
 │   AiAgentService  ·  LangChain + Ollama  ·  Reflexion Loop  │
 └─────────────┬───────────────────────────┬───────────────────┘
               │                           │
@@ -34,12 +34,12 @@ A context-aware, polyglot **Retrieval-Augmented Generation** platform built for 
 
 | Service | Port(s) | Technology | Role |
 |---|---|---|---|
-| `java-api` | `8080` | Spring Boot 3.2 · Java 21 | REST API, auth, document metadata, gRPC client |
+| `java-api` | `8080` | Spring Boot 3.2 · Java 21 | REST API, document metadata, gRPC client |
 | `inference-engine` | `50051` | Python 3.12 · asyncio gRPC | RAG pipeline, LLM calls, reflexion self-correction |
-| `postgres` | `5432` | PostgreSQL 16 + pgvector | Metadata persistence |
+| `postgres` | `5432` | PostgreSQL 16 + pgvector | Metadata & conversation persistence |
 | `qdrant` | `6333` / `6334` | Qdrant | Vector storage & similarity search |
 | `phoenix` | `6006` / `4317` / `4318` | Arize Phoenix | LLM observability & OTLP tracing |
-| `frontend` | `5173` (dev) | React + Vite + TypeScript | Chat & document-ingestion UI |
+| `frontend` | `3000` (Docker) / `5173` (dev) | React + Vite + TypeScript | Chat & document-ingestion UI |
 
 ---
 
@@ -61,8 +61,8 @@ A context-aware, polyglot **Retrieval-Augmented Generation** platform built for 
 | Docker & Docker Compose | v2.20+ |
 | Ollama | [ollama.com](https://ollama.com) — running on the host machine |
 | Java (local dev only) | 21+ |
-| Python (local dev only) | 3.11+ |
-| Node.js (local dev only) | 20+ |
+| Python (local dev only) | 3.12+ |
+| Node.js (local dev only) | 22+ |
 
 ### Pull required Ollama models
 
@@ -110,6 +110,16 @@ npm run dev
 
 ## Local Development
 
+### One-command launcher
+
+`start.sh` starts all services (Postgres, Qdrant, Phoenix via Docker; Python inference engine; React frontend; Java control plane) in a single command:
+
+```bash
+./start.sh
+```
+
+It requires a Python `venv` to already exist in `inference-engine/venv`. Press `Ctrl+C` to stop all processes cleanly.
+
 ### Control Plane (Java)
 
 ```bash
@@ -126,7 +136,7 @@ cd inference-engine
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Regenerate gRPC stubs after proto changes
+# Regenerate gRPC stubs after proto changes (or run build.sh from the project root)
 python -m grpc_tools.protoc \
   -I../shared-protos \
   --python_out=. \
@@ -135,6 +145,8 @@ python -m grpc_tools.protoc \
 
 python main.py
 ```
+
+> **Tip:** `build.sh` in the project root regenerates Python stubs *and* runs `mvn clean compile` for Java in one step.
 
 ---
 
@@ -147,20 +159,53 @@ Agentic_RAG_System/
 ├── control-plane/                # Java 21 · Spring Boot 3
 │   ├── pom.xml
 │   └── src/main/java/com/ai/orchestrator/
-│       ├── controller/           # REST endpoints (chat, documents, query)
-│       ├── service/              # DocumentService (async ingestion), AiQueryService
-│       ├── model/                # JPA entities (DocumentMetadata, Conversation)
+│       ├── AiClient.java         # gRPC client wrapper
+│       ├── OrchestratorApplication.java
+│       ├── config/               # SecurityConfig (CSRF-off, permit-all for Phase 1)
+│       ├── controller/           # ChatController, QueryController, DocumentController
+│       ├── dto/                  # ChatRequest, QueryRequest, QueryResponse
+│       ├── service/              # AiQueryService (processChat/processQuery), DocumentService (async indexing)
+│       ├── model/                # JPA entities: Conversation, DocumentMetadata, IndexingStatus
 │       └── repository/           # Spring Data JPA repositories
 ├── inference-engine/             # Python 3.12 · asyncio gRPC server
 │   ├── main.py                   # gRPC servicer + Reflexion loop
 │   ├── rag.py                    # Qdrant vector store initialisation
-│   └── requirements.txt
+│   ├── requirements.txt          # Pinned runtime dependencies
+│   ├── requirements-test.txt     # Minimal pinned CI test dependencies
+│   └── tests/                    # pytest suite (conftest, test_rag, test_servicer_*)
 ├── frontend/                     # React · Vite · TypeScript
 │   └── src/
 │       ├── App.tsx               # Chat & document upload UI
-│       └── index.css             # Global styles
+│       ├── index.css             # Global styles
+│       └── __tests__/            # Vitest test suite
 ├── compose.yaml                  # Full stack orchestration
-└── .gitignore
+├── build.sh                      # Regenerates gRPC stubs (Python + Java compile)
+├── start.sh                      # One-command local dev launcher (all services)
+└── .env.example                  # Template for local environment overrides
+```
+
+---
+
+## REST API
+
+The Control Plane exposes three REST endpoints at `http://localhost:8080`:
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/chat` | **Production chat** — loads session history from Postgres, calls gRPC, persists the turn. Body: `{ "query": "...", "userId": "..." }` |
+| `POST` | `/api/v1/query` | **Debug / smoke-test query** — raw pass-through to gRPC, no history persistence. Body: `{ "query": "...", "userId": "...", "sessionHistory": ["..."] }` |
+| `POST` | `/api/documents` | Upload a document (multipart `file` + `userId`). Returns `202 Accepted` immediately; indexing runs async. |
+| `GET` | `/api/documents/{userId}` | List all documents uploaded by a user with their current `IndexingStatus` (`PENDING`, `INDEXING`, `INDEXED`, `FAILED`). |
+
+All endpoints return JSON. `POST /api/chat` and `POST /api/v1/query` return:
+
+```json
+{
+  "answer": "...",
+  "sourceDocuments": ["filename.pdf"],
+  "confidenceScore": 0.9,
+  "latencyMs": 312
+}
 ```
 
 ---
@@ -191,6 +236,7 @@ service AiAgentService {
 | `OLLAMA_MODEL` | `llama3.2` | Chat model to use |
 | `QDRANT_HOST` | `localhost` | Qdrant host |
 | `QDRANT_PORT` | `6333` | Qdrant REST port |
+| `PHOENIX_OTLP_ENDPOINT` | `http://localhost:4317` | OTLP gRPC endpoint for Arize Phoenix traces |
 | `SPRING_DATASOURCE_URL` | *(compose default)* | PostgreSQL JDBC URL |
 | `GRPC_CLIENT_INFERENCE_ENGINE_ADDRESS` | `static://inference-engine:50051` | gRPC target address (Spring) |
 
