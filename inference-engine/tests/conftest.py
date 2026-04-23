@@ -94,3 +94,7 @@ _dist = MagicMock()
 _dist.COSINE = "Cosine"
 _qdrant_models.Distance = _dist
 _qdrant_models.VectorParams = MagicMock()
+
+# sentence_transformers — CrossEncoder imported by reranker.py
+_st = _make_stub_module("sentence_transformers")
+_st.CrossEncoder = MagicMock()

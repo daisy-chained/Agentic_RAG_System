@@ -54,7 +54,7 @@ _make_grpc_module()
 for pkg in ["langchain_ollama", "langchain_qdrant", "qdrant_client",
             "qdrant_client.http", "qdrant_client.http.models", "dotenv",
             "langchain_community", "langchain_community.document_loaders",
-            "langchain_text_splitters"]:
+            "langchain_text_splitters", "sentence_transformers"]:
     if pkg not in sys.modules:
         m = types.ModuleType(pkg)
         sys.modules[pkg] = m
@@ -69,9 +69,11 @@ sys.modules["qdrant_client.http.models"].VectorParams = MagicMock()
 sys.modules["langchain_community.document_loaders"].PyPDFLoader = MagicMock()
 sys.modules["langchain_community.document_loaders"].TextLoader = MagicMock()
 sys.modules["langchain_text_splitters"].RecursiveCharacterTextSplitter = MagicMock()
+sys.modules["sentence_transformers"].CrossEncoder = MagicMock()
 
 import importlib
 import rag as rag_module  # noqa: E402
+import reranker as reranker_module  # noqa: E402
 
 # Patch rag.vector_store before importing main
 rag_module.vector_store = MagicMock()
@@ -112,6 +114,10 @@ class TestProcessQuery:
     def reset_mocks(self):
         rag_module.vector_store.reset_mock()
         main_module._llm.ainvoke = AsyncMock()
+        # Stub reranker to pass candidates through so ProcessQuery tests remain
+        # focused on LLM / reflection logic, not reranker scoring.
+        reranker_module._cross_encoder = None
+        reranker_module.rerank = MagicMock(side_effect=lambda q, candidates, **kw: candidates)
 
     # -- happy path ----------------------------------------------------------
 

@@ -20,6 +20,7 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 import rag
+import reranker
 
 # ── Observability Tracing (Arize Phoenix) ─────────────────────────────────────
 trace.set_tracer_provider(TracerProvider())
@@ -55,17 +56,23 @@ class AiAgentServicer(pb2_grpc.AiAgentServiceServicer):
         start_time = time.monotonic()
         print(f"[ProcessQuery] userId={request.user_id} query='{request.query[:80]}...'")
 
-        # 1. RAG Retrieval via Qdrant
+        # 1. RAG Retrieval via Qdrant → cross-encoder reranking
         retrieved_docs = []
         try:
-            # Run similarity search asynchronously using to_thread
-            results = await asyncio.to_thread(
+            # Fetch a wider candidate set so the reranker has more to work with
+            candidates = await asyncio.to_thread(
                 rag.vector_store.similarity_search_with_score,
                 query=request.query,
-                k=3
+                k=10
+            )
+            # Rerank candidates with the cross-encoder and keep the top results
+            top_results = await asyncio.to_thread(
+                reranker.rerank,
+                request.query,
+                candidates,
             )
             context_texts = []
-            for doc, score in results:
+            for doc, score in top_results:
                 source = doc.metadata.get("source", "Unknown")
                 retrieved_docs.append(source)
                 context_texts.append(f"--- Excerpt from {source} ---\n{doc.page_content}\n")
