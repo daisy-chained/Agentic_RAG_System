@@ -16,10 +16,17 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 import ai_service_pb2_grpc as pb2_grpc
 import ai_service_pb2 as pb2
 import tempfile
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    Docx2txtLoader,
+    CSVLoader,
+    BSHTMLLoader,
+)
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 import rag
+import reranker
 
 # ── Observability Tracing (Arize Phoenix) ─────────────────────────────────────
 trace.set_tracer_provider(TracerProvider())
@@ -48,6 +55,116 @@ _llm = ChatOllama(model=_OLLAMA_MODEL, base_url=_OLLAMA_HOST, num_ctx=_OLLAMA_NU
 print(f"✓ Inference Engine configured — ollama host={_OLLAMA_HOST} model={_OLLAMA_MODEL} num_ctx={_OLLAMA_NUM_CTX}")
 
 
+# ── Custom document loaders (pure-Python, no system-level dependencies) ──────
+
+class _XlsxLoader:
+    """Load .xlsx spreadsheets using openpyxl (pure Python)."""
+
+    def __init__(self, file_path: str):
+        self._path = file_path
+
+    def load(self):
+        import openpyxl
+        from langchain_core.documents import Document
+
+        wb = openpyxl.load_workbook(self._path, read_only=True, data_only=True)
+        docs = []
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                row_str = "\t".join("" if v is None else str(v) for v in row)
+                if row_str.strip():
+                    rows.append(row_str)
+            if rows:
+                docs.append(Document(
+                    page_content="\n".join(rows),
+                    metadata={"sheet": sheet_name},
+                ))
+        wb.close()
+        return docs
+
+
+class _XlsLoader:
+    """Load legacy .xls spreadsheets using xlrd (pure Python)."""
+
+    def __init__(self, file_path: str):
+        self._path = file_path
+
+    def load(self):
+        import xlrd
+        from langchain_core.documents import Document
+
+        wb = xlrd.open_workbook(self._path)
+        docs = []
+        for sheet in wb.sheets():
+            rows = []
+            for rx in range(sheet.nrows):
+                row_str = "\t".join(
+                    str(sheet.cell_value(rx, cx)) for cx in range(sheet.ncols)
+                )
+                if row_str.strip():
+                    rows.append(row_str)
+            if rows:
+                docs.append(Document(
+                    page_content="\n".join(rows),
+                    metadata={"sheet": sheet.name},
+                ))
+        return docs
+
+
+class _PptxLoader:
+    """Load .pptx presentations using python-pptx (pure Python)."""
+
+    def __init__(self, file_path: str):
+        self._path = file_path
+
+    def load(self):
+        from pptx import Presentation
+        from langchain_core.documents import Document
+
+        prs = Presentation(self._path)
+        docs = []
+        for i, slide in enumerate(prs.slides, 1):
+            texts = [
+                shape.text_frame.text
+                for shape in slide.shapes
+                if shape.has_text_frame
+            ]
+            content = "\n".join(texts).strip()
+            if content:
+                docs.append(Document(
+                    page_content=content,
+                    metadata={"slide": i},
+                ))
+        return docs
+
+
+class _EpubLoader:
+    """Load .epub e-books using ebooklib + BeautifulSoup (pure Python)."""
+
+    def __init__(self, file_path: str):
+        self._path = file_path
+
+    def load(self):
+        import ebooklib
+        from ebooklib import epub
+        from bs4 import BeautifulSoup
+        from langchain_core.documents import Document
+
+        book = epub.read_epub(self._path)
+        docs = []
+        for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+            soup = BeautifulSoup(item.get_content(), "html.parser")
+            text = soup.get_text(separator="\n", strip=True)
+            if text:
+                docs.append(Document(
+                    page_content=text,
+                    metadata={"item": item.get_name()},
+                ))
+        return docs
+
+
 # ── gRPC Servicer ─────────────────────────────────────────────────────────────
 class AiAgentServicer(pb2_grpc.AiAgentServiceServicer):
 
@@ -55,17 +172,23 @@ class AiAgentServicer(pb2_grpc.AiAgentServiceServicer):
         start_time = time.monotonic()
         print(f"[ProcessQuery] userId={request.user_id} query='{request.query[:80]}...'")
 
-        # 1. RAG Retrieval via Qdrant
+        # 1. RAG Retrieval via Qdrant → cross-encoder reranking
         retrieved_docs = []
         try:
-            # Run similarity search asynchronously using to_thread
-            results = await asyncio.to_thread(
+            # Fetch a wider candidate set so the reranker has more to work with
+            candidates = await asyncio.to_thread(
                 rag.vector_store.similarity_search_with_score,
                 query=request.query,
-                k=3
+                k=10
+            )
+            # Rerank candidates with the cross-encoder and keep the top results
+            top_results = await asyncio.to_thread(
+                reranker.rerank,
+                request.query,
+                candidates,
             )
             context_texts = []
-            for doc, score in results:
+            for doc, score in top_results:
                 source = doc.metadata.get("source", "Unknown")
                 retrieved_docs.append(source)
                 context_texts.append(f"--- Excerpt from {source} ---\n{doc.page_content}\n")
@@ -141,11 +264,22 @@ class AiAgentServicer(pb2_grpc.AiAgentServiceServicer):
             with os.fdopen(fd, 'wb') as f:
                 f.write(request.file_content)
             
-            # 2. Parse Document
-            if request.filename.lower().endswith(".pdf"):
-                loader = PyPDFLoader(temp_path)
-            else:
-                loader = TextLoader(temp_path)
+            # 2. Parse Document — pick loader by file extension
+            ext = os.path.splitext(request.filename.lower())[1]
+            _loader_map = {
+                ".pdf":  PyPDFLoader,
+                ".docx": Docx2txtLoader,
+                ".xlsx": _XlsxLoader,
+                ".xls":  _XlsLoader,
+                ".pptx": _PptxLoader,
+                ".csv":  CSVLoader,
+                ".md":   TextLoader,
+                ".html": BSHTMLLoader,
+                ".htm":  BSHTMLLoader,
+                ".epub": _EpubLoader,
+                ".txt":  TextLoader,
+            }
+            loader = _loader_map.get(ext, TextLoader)(temp_path)
             
             docs = loader.load()
 

@@ -1,8 +1,9 @@
 """
 Unit tests for AiAgentServicer.IndexDocument.
 
-PyPDFLoader, TextLoader, RecursiveCharacterTextSplitter, and
-rag.vector_store.add_documents are mocked.
+PyPDFLoader, TextLoader, Docx2txtLoader, CSVLoader, BSHTMLLoader,
+_XlsxLoader, _XlsLoader, _PptxLoader, _EpubLoader,
+RecursiveCharacterTextSplitter, and rag.vector_store.add_documents are mocked.
 """
 import os
 import sys
@@ -53,7 +54,7 @@ _ensure_proto_stubs()
 for pkg in ["langchain_ollama", "langchain_qdrant", "qdrant_client",
             "qdrant_client.http", "qdrant_client.http.models", "dotenv",
             "langchain_community", "langchain_community.document_loaders",
-            "langchain_text_splitters"]:
+            "langchain_text_splitters", "sentence_transformers"]:
     if pkg not in sys.modules:
         m = types.ModuleType(pkg)
         sys.modules[pkg] = m
@@ -65,6 +66,7 @@ sys.modules["qdrant_client"].QdrantClient = MagicMock()
 _dist = MagicMock(); _dist.COSINE = "Cosine"
 sys.modules["qdrant_client.http.models"].Distance = _dist
 sys.modules["qdrant_client.http.models"].VectorParams = MagicMock()
+sys.modules["sentence_transformers"].CrossEncoder = MagicMock()
 
 import rag as rag_module  # noqa: E402
 
@@ -252,3 +254,176 @@ class TestIndexDocument:
             )
 
         mock_remove.assert_called_once()
+
+    # ── New format tests ──────────────────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_docx_file_uses_docx2txt_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="word content", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main.Docx2txtLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="report.docx"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_xlsx_file_uses_xlsx_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="sheet data", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main._XlsxLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="data.xlsx"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_xls_file_uses_xls_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="legacy sheet", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main._XlsLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="old.xls"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_pptx_file_uses_pptx_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="slide content", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main._PptxLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="deck.pptx"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_csv_file_uses_csv_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="col1,col2\nval1,val2", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main.CSVLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="export.csv"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_html_file_uses_html_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="<p>hello</p>", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main.BSHTMLLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="page.html"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_htm_file_uses_html_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="<p>hello</p>", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main.BSHTMLLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="page.htm"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_epub_file_uses_epub_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="chapter text", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main._EpubLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="book.epub"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_unknown_extension_falls_back_to_text_loader(self):
+        from langchain_core.documents import Document
+
+        doc = Document(page_content="raw text", metadata={})
+        mock_loader_cls = _make_mock_loader([doc])
+        mock_splitter_cls = _make_splitter([doc])
+
+        with patch("main.TextLoader", mock_loader_cls), \
+             patch("main.RecursiveCharacterTextSplitter", mock_splitter_cls), \
+             patch("os.remove"):
+
+            resp = await main_module.AiAgentServicer().IndexDocument(
+                _FakeIndexRequest(filename="file.xyz"), _FakeContext()
+            )
+
+        mock_loader_cls.assert_called_once()
+        assert resp.status == "SUCCESS"

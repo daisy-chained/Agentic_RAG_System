@@ -70,12 +70,15 @@ _langchain_ollama.ChatOllama = MagicMock()
 _dotenv = _make_stub_module("dotenv")
 _dotenv.load_dotenv = MagicMock()
 
-# langchain_community.document_loaders — PyPDFLoader/TextLoader imported by main.py
+# langchain_community.document_loaders — loaders imported by main.py
 _lc_community = _make_stub_module("langchain_community")
 _lc_loaders = _make_stub_module("langchain_community.document_loaders")
 _lc_community.document_loaders = _lc_loaders
 _lc_loaders.PyPDFLoader = MagicMock()
 _lc_loaders.TextLoader = MagicMock()
+_lc_loaders.Docx2txtLoader = MagicMock()
+_lc_loaders.CSVLoader = MagicMock()
+_lc_loaders.BSHTMLLoader = MagicMock()
 
 # langchain_text_splitters — RecursiveCharacterTextSplitter imported by main.py
 _lc_splitters = _make_stub_module("langchain_text_splitters")
@@ -94,3 +97,7 @@ _dist = MagicMock()
 _dist.COSINE = "Cosine"
 _qdrant_models.Distance = _dist
 _qdrant_models.VectorParams = MagicMock()
+
+# sentence_transformers — CrossEncoder imported by reranker.py
+_st = _make_stub_module("sentence_transformers")
+_st.CrossEncoder = MagicMock()

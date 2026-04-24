@@ -48,6 +48,7 @@ Agentic_RAG_System/
 ├── inference-engine/                 # Python 3.12 · asyncio gRPC server
 │   ├── main.py                       # gRPC servicer: ProcessQuery + IndexDocument + Reflexion loop
 │   ├── rag.py                        # Qdrant vector store + OllamaEmbeddings initialisation
+│   ├── reranker.py                   # Cross-encoder reranker (ms-marco-MiniLM-L-6-v2)
 │   ├── requirements.txt
 │   └── Dockerfile
 │
@@ -76,6 +77,7 @@ Agentic_RAG_System/
 | File | Purpose |
 |---|---|
 | `shared-protos/ai_service.proto` | The contract between Java and Python — never edit stubs directly, only edit this file and re-run `build.sh` |
+| `inference-engine/reranker.py` | Cross-encoder reranker — rescores Qdrant candidates before passing context to the LLM |
 | `init.sh` | One-shot Ubuntu bootstrap; run once per machine |
 | `start.sh` | One-command local dev launcher |
 | `build.sh` | Regenerate gRPC stubs after proto changes |
@@ -91,6 +93,8 @@ Agentic_RAG_System/
 | **Control Plane** | Java 21, Spring Boot 3.2, Spring Data JPA, Spring Security |
 | **gRPC (Java)** | `grpc-client-spring-boot-starter`, `protobuf-maven-plugin` |
 | **Inference Engine** | Python 3.12, `grpcio 1.62.2`, `langchain`, `langchain-ollama` |
+| **Document Parsing** | `pypdf`, `docx2txt`, `openpyxl`, `xlrd`, `python-pptx`, `beautifulsoup4`, `ebooklib` — all pure-Python |
+| **Reranking** | `sentence-transformers` — `cross-encoder/ms-marco-MiniLM-L-6-v2` |
 | **Vector Store** | Qdrant, `langchain-qdrant`, `nomic-embed-text` (768-dim cosine) |
 | **LLM** | Ollama — model auto-selected by `init.sh` based on available VRAM/RAM |
 | **Persistence** | PostgreSQL 16, pgvector |

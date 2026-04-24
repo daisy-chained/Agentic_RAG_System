@@ -41,17 +41,19 @@ Here is your step-by-step task list to go from zero to a portfolio-ready system.
         * Upserts them into your Vector Database.
 9.  **The Retrieval Logic (RAG):**
     * *Task:* Implement a function that takes a query, searches the Vector DB for the top 3 snippets, and feeds them into the Gemini 3.1 prompt as "Context."
+10. **Cross-Encoder Reranker:**
+    * *Task:* After retrieving a wider candidate set (e.g. top 10) from the Vector DB, pass each `(query, chunk)` pair through a lightweight cross-encoder model (`cross-encoder/ms-marco-MiniLM-L-6-v2` via `sentence-transformers`) and keep only the top-N highest-scoring chunks. This improves context precision without the latency or cost of a full LLM call per chunk, and runs entirely on-device alongside the embedding model.
 
 ---
 
 ## Phase 4: Senior-Level Polish (The "Wow" Factor)
 *Goal: Move from "Tutorial" to "Engineer."*
 
-10. **Agentic Self-Correction:**
+11. **Agentic Self-Correction:**
     * *Task:* Add a "Reflection" step in Python. Before returning the answer, ask the LLM: *"Does this answer actually use the provided context? If not, rewrite it."*
-11. **Observability (OpenTelemetry):**
+12. **Observability (OpenTelemetry):**
     * *Task:* Use a tool like **Arize Phoenix** or **LangSmith**. Show that you can track exactly how long each retrieval took and how many tokens you spent.
-12. **The "Rosetta" Frontend:**
+13. **The "Rosetta" Frontend:**
     * *Task:* (Optional but recommended) Build a simple React/Next.js UI that shows the "Thought Process"—displaying which specific document chunks were used to generate the answer.
 
 ---
