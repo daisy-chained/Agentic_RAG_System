@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Re-exec under Bash when invoked with sh.
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec bash "$0" "$@"
+fi
+
 # init.sh — One-shot environment bootstrap for the Agentic RAG System.
 #
 # Detects hardware, installs GPU drivers, selects an Ollama model and context
@@ -66,6 +71,16 @@ run() {
     fi
 }
 
+# Execute a shell pipeline or redirection-aware command.
+run_shell() {
+    local command=$1
+    if [[ $DRY_RUN -eq 1 ]]; then
+        echo -e "${YELLOW}[dry-run]${NC} ${command}"
+    else
+        bash -lc "$command"
+    fi
+}
+
 # Run apt-get update at most once per invocation.
 apt_update_once() {
     if [[ $APT_UPDATED -eq 0 ]]; then
@@ -77,6 +92,102 @@ apt_update_once() {
 
 # Return 0 if a command is available.
 has() { command -v "$1" &>/dev/null; }
+
+# Return 0 if a command name or absolute path is executable.
+has_exec() {
+    local target=$1
+    if [[ "$target" == */* ]]; then
+        [[ -x "$target" ]]
+    else
+        has "$target"
+    fi
+}
+
+# Install apt packages only when missing.
+apt_install_if_missing() {
+    local missing=()
+    local pkg
+    for pkg in "$@"; do
+        if ! dpkg -s "$pkg" &>/dev/null; then
+            missing+=("$pkg")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        apt_update_once
+        run sudo apt-get install -y -qq "${missing[@]}"
+    fi
+}
+
+java_version() {
+    if has java; then
+        java -version 2>&1 | grep -oP '(?<=version ")[0-9]+' | head -1
+    else
+        echo 0
+    fi
+}
+
+javac_version() {
+    if has javac; then
+        javac -version 2>&1 | grep -oP '[0-9]+' | head -1
+    else
+        echo 0
+    fi
+}
+
+python_version() {
+    if has python3; then
+        python3 --version 2>&1 | grep -oP '3\.\K[0-9]+' | head -1
+    else
+        echo 0
+    fi
+}
+
+node_version() {
+    if has node; then
+        node --version 2>&1 | grep -oP 'v\K[0-9]+' | head -1
+    else
+        echo 0
+    fi
+}
+
+find_java_home() {
+    local candidate
+    local major
+
+    if has javac && [[ $(javac_version) -ge 21 ]]; then
+        dirname "$(dirname "$(readlink -f "$(command -v javac)")")"
+        return 0
+    fi
+
+    if has java && [[ $(java_version) -ge 21 ]]; then
+        dirname "$(dirname "$(readlink -f "$(command -v java)")")"
+        return 0
+    fi
+
+    for candidate in /usr/lib/jvm/*; do
+        if [[ -x "$candidate/bin/javac" ]]; then
+            major=$("$candidate/bin/javac" -version 2>&1 | grep -oP '[0-9]+' | head -1 || echo 0)
+            if [[ ${major:-0} -ge 21 ]]; then
+                echo "$candidate"
+                return 0
+            fi
+        fi
+    done
+
+    return 1
+}
+
+describe_command() {
+    local target=$1
+    shift
+
+    if has_exec "$target"; then
+        "$target" "$@" 2>&1 | head -1
+    else
+        echo "not installed"
+    fi
+}
 
 # Print a two-column summary row.
 summary_row() { printf "  %-30s %s\n" "$1" "$2"; }
@@ -106,19 +217,27 @@ fi
 log_info "OS: ${PRETTY_NAME}"
 
 # ── 1b. sudo availability ──────────────────────────────────────────────────────
-if ! has sudo; then
-    log_error "sudo is not installed. Please install sudo and re-run."
-    exit 1
-fi
-if ! sudo -n true 2>/dev/null; then
-    if [[ $CI -eq 1 ]]; then
-        log_error "sudo requires a password but --ci was passed. Configure passwordless sudo."
+if [[ $DRY_RUN -eq 1 ]]; then
+    if has sudo; then
+        log_info "sudo: dry-run mode — skipping credential check"
+    else
+        log_warn "sudo is not installed, but dry-run mode will continue without executing privileged commands."
+    fi
+else
+    if ! has sudo; then
+        log_error "sudo is not installed. Please install sudo and re-run."
         exit 1
     fi
-    echo -e "${YELLOW}  This script requires sudo for some steps. You may be prompted.${NC}"
-    sudo -v   # cache credentials up front
+    if ! sudo -n true 2>/dev/null; then
+        if [[ $CI -eq 1 ]]; then
+            log_error "sudo requires a password but --ci was passed. Configure passwordless sudo."
+            exit 1
+        fi
+        echo -e "${YELLOW}  This script requires sudo for some steps. You may be prompted.${NC}"
+        sudo -v   # cache credentials up front
+    fi
+    log_info "sudo: OK"
 fi
-log_info "sudo: OK"
 
 # Keep sudo alive for the duration of the script.
 if [[ $DRY_RUN -eq 0 ]]; then
@@ -129,6 +248,11 @@ fi
 
 # ── 2. Hardware detection ─────────────────────────────────────────────────────
 log_section "2/12  Hardware detection"
+
+if ! has lspci; then
+    log_info "Installing pciutils for hardware detection…"
+    apt_install_if_missing pciutils
+fi
 
 GPU_VENDOR="none"     # none | nvidia | amd
 VRAM_MB=0
@@ -204,6 +328,7 @@ elif [[ "$GPU_VENDOR" == "amd" ]]; then
         log_info "ROCm already loaded — VRAM: ${VRAM_MB} MB"
     else
         log_info "AMD GPU detected; installing ROCm stack…"
+        apt_install_if_missing curl
         apt_update_once
         # Add the AMDGPU installer from AMD's official repo.
         AMDGPU_DEB="amdgpu-install_6.1.60103-1_all.deb"
@@ -255,6 +380,7 @@ NOMIC_MB=274
 select_profile() {
     local budget=$1  # MB
     local use_vram=$2  # 1 = GPU, 0 = CPU
+    : "$use_vram"
 
     # Candidate profiles: (model tag, ctx, total_MB_needed)
     # Ordered from most capable to least; first one that fits wins.
@@ -310,17 +436,14 @@ if has docker && docker compose version &>/dev/null 2>&1; then
     log_info "Docker ${DOCKER_VER} (with Compose plugin) — already installed"
 else
     log_info "Installing Docker…"
-    apt_update_once
-    run sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
+    apt_install_if_missing ca-certificates curl gnupg lsb-release
     run sudo install -m 0755 -d /etc/apt/keyrings
     run sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
         -o /etc/apt/keyrings/docker.asc
     run sudo chmod a+r /etc/apt/keyrings/docker.asc
     ARCH=$(dpkg --print-architecture)
     CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
-    echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] \
-https://download.docker.com/linux/ubuntu ${CODENAME} stable" \
-        | run sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    run_shell "echo 'deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${CODENAME} stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null"
     APT_UPDATED=0  # force refresh after adding new repo
     apt_update_once
     run sudo apt-get install -y -qq \
@@ -335,21 +458,15 @@ fi
 log_section "6/12  Java 21"
 
 JAVA_MIN=21
-java_version() { java -version 2>&1 | grep -oP '(?<=version ")[0-9]+' | head -1; }
 
-if has java && [[ $(java_version) -ge $JAVA_MIN ]]; then
-    log_info "Java $(java_version) — already installed"
+if has java && has javac && [[ $(java_version) -ge $JAVA_MIN ]] && [[ $(javac_version) -ge $JAVA_MIN ]]; then
+    log_info "Java $(java_version) / javac $(javac_version) — already installed"
 else
     log_info "Installing Eclipse Temurin JDK 21…"
-    apt_update_once
-    run sudo apt-get install -y -qq wget apt-transport-https gpg
-    run wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public \
-        | run gpg --dearmor \
-        | run sudo tee /etc/apt/keyrings/adoptium.gpg > /dev/null
+    apt_install_if_missing wget apt-transport-https gpg
+    run_shell "wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor | sudo tee /etc/apt/keyrings/adoptium.gpg > /dev/null"
     CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
-    echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] \
-https://packages.adoptium.net/artifactory/deb ${CODENAME} main" \
-        | run sudo tee /etc/apt/sources.list.d/adoptium.list > /dev/null
+    run_shell "echo 'deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb ${CODENAME} main' | sudo tee /etc/apt/sources.list.d/adoptium.list > /dev/null"
     APT_UPDATED=0
     apt_update_once
     run sudo apt-get install -y -qq temurin-21-jdk
@@ -357,9 +474,12 @@ https://packages.adoptium.net/artifactory/deb ${CODENAME} main" \
 fi
 
 # Ensure JAVA_HOME is set in the current shell.
-if [[ -z "${JAVA_HOME:-}" ]]; then
-    JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")
+if [[ -z "${JAVA_HOME:-}" ]] && JAVA_HOME_CANDIDATE=$(find_java_home); then
+    JAVA_HOME=$JAVA_HOME_CANDIDATE
     export JAVA_HOME
+fi
+if [[ -n "${JAVA_HOME:-}" ]]; then
+    export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
 # ── 7. Maven ──────────────────────────────────────────────────────────────────
@@ -387,9 +507,10 @@ elif [[ -f "$MVN_LOCAL_BIN" ]] && mvn_version_ok "$MVN_LOCAL_BIN"; then
 else
     MVN_VERSION="3.9.9"
     log_info "Downloading Maven ${MVN_VERSION} locally (no system install)…"
+    apt_install_if_missing curl tar
     run mkdir -p "$MVN_LOCAL_DIR"
     run curl -fsSL \
-        "https://dlcdn.apache.org/maven/maven-3/${MVN_VERSION}/binaries/apache-maven-${MVN_VERSION}-bin.tar.gz" \
+        "https://archive.apache.org/dist/maven/maven-3/${MVN_VERSION}/binaries/apache-maven-${MVN_VERSION}-bin.tar.gz" \
         -o /tmp/maven.tar.gz
     run tar -xzf /tmp/maven.tar.gz -C "$MVN_LOCAL_DIR" --strip-components=1
     run rm -f /tmp/maven.tar.gz
@@ -401,7 +522,6 @@ fi
 log_section "8/12  Python"
 
 PYTHON_MIN=11   # 3.11 or newer
-python_version() { python3 --version 2>&1 | grep -oP '3\.\K[0-9]+' | head -1; }
 
 if has python3 && [[ $(python_version) -ge $PYTHON_MIN ]]; then
     PYTHON_CMD="python3"
@@ -422,28 +542,37 @@ fi
 log_section "9/12  Node.js"
 
 NODE_MIN=20
-node_version() { node --version 2>&1 | grep -oP 'v\K[0-9]+' | head -1; }
 
 if has node && [[ $(node_version) -ge $NODE_MIN ]]; then
     log_info "Node $(node --version) — already installed"
 else
     log_info "Installing Node.js ${NODE_MIN} LTS via NodeSource…"
-    apt_update_once
-    run curl -fsSL "https://deb.nodesource.com/setup_${NODE_MIN}.x" | run sudo -E bash -
+    apt_install_if_missing curl ca-certificates gnupg
+    run_shell "curl -fsSL https://deb.nodesource.com/setup_${NODE_MIN}.x | sudo -E bash -"
     APT_UPDATED=0
     apt_update_once
     run sudo apt-get install -y -qq nodejs
-    log_info "Node $(node --version) installed"
+    if has node; then
+        log_info "Node $(node --version) installed"
+    else
+        log_info "Node.js ${NODE_MIN} installation scheduled"
+    fi
 fi
 
 # ── 10. Ollama ────────────────────────────────────────────────────────────────
 log_section "10/12  Ollama"
 
+if ! has curl; then
+    log_info "Installing curl for Ollama setup and health checks…"
+    apt_install_if_missing curl
+fi
+
 if has ollama; then
     log_info "Ollama already installed: $(ollama --version 2>/dev/null || echo 'version unknown')"
 else
     log_info "Installing Ollama…"
-    run curl -fsSL https://ollama.com/install.sh | run sh
+    apt_install_if_missing curl
+    run_shell "curl -fsSL https://ollama.com/install.sh | sh"
     log_info "Ollama installed"
 fi
 
@@ -586,18 +715,18 @@ echo -e "${BOLD}  ╔═══════════════════�
 echo   "  ║                 Initialisation Summary                ║"
 echo -e "  ╚════════════════════════════════════════════════════╝${NC}"
 echo ""
-summary_row "OS"            "${PRETTY_NAME}"
+summary_row "OS"            "${PRETTY_NAME:-unknown}"
 summary_row "GPU vendor"    "${GPU_VENDOR}"
 summary_row "VRAM"          "${VRAM_MB} MB"
 summary_row "System RAM"    "${RAM_MB} MB"
 summary_row "Memory budget" "${BUDGET} MB  (${PROFILE_SOURCE})"
 summary_row "Ollama model"  "${OLLAMA_MODEL}"
 summary_row "Context size"  "${OLLAMA_NUM_CTX} tokens"
-summary_row "Java"          "$(java -version 2>&1 | head -1 || echo 'see above')"
+summary_row "Java"          "$(describe_command java -version)"
 summary_row "Maven cmd"     "${MVN_CMD}"
-summary_row "Python"        "$("$PYTHON_CMD" --version 2>&1)"
-summary_row "Node.js"       "$(node --version 2>&1)"
-summary_row "Ollama"        "$(ollama --version 2>/dev/null || echo 'installed')"
+summary_row "Python"        "$(describe_command "$PYTHON_CMD" --version)"
+summary_row "Node.js"       "$(describe_command node --version)"
+summary_row "Ollama"        "$(describe_command ollama --version)"
 echo ""
 
 if [[ $NEEDS_REBOOT -eq 1 ]]; then
